@@ -2,7 +2,7 @@
 
 A skill that makes AI coding agents work with discipline. Built for **Mistral Vibe**, compatible with any agent that supports the `SKILL.md` format (Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot, OpenCode, Windsurf…).
 
-## What the `agent-discipline` skill enforces
+## What the `mistral-vibe-harness` skill enforces
 
 | Rule | Detail |
 |------|--------|
@@ -19,7 +19,7 @@ A skill that makes AI coding agents work with discipline. Built for **Mistral Vi
 
 ```
 skills/
-  agent-discipline/
+  mistral-vibe-harness/
     SKILL.md        # the skill (frontmatter + instructions)
 README.md
 LICENSE
@@ -36,7 +36,7 @@ Vibe loads skills from `~/.vibe/skills/` (global) or `.vibe/skills/` (project).
 ```bash
 git clone https://github.com/librehubstore/mistral-vibe-harness.git
 mkdir -p ~/.vibe/skills
-cp -r mistral-vibe-harness/skills/agent-discipline ~/.vibe/skills/
+cp -r mistral-vibe-harness/skills/mistral-vibe-harness ~/.vibe/skills/
 ```
 
 **Windows (PowerShell)**
@@ -44,12 +44,12 @@ cp -r mistral-vibe-harness/skills/agent-discipline ~/.vibe/skills/
 ```powershell
 git clone https://github.com/librehubstore/mistral-vibe-harness.git
 New-Item -ItemType Directory -Force "$HOME\.vibe\skills" | Out-Null
-Copy-Item -Recurse mistral-vibe-harness\skills\agent-discipline "$HOME\.vibe\skills\"
+Copy-Item -Recurse mistral-vibe-harness\skills\mistral-vibe-harness "$HOME\.vibe\skills\"
 ```
 
 For a single project, copy into `<project>/.vibe/skills/` instead.
 
-Check: start `vibe` and give it a coding task — you should see `Loading skill: agent-discipline` before its first edit.
+Check: start `vibe` and give it a coding task — you should see `Loading skill: mistral-vibe-harness` before its first edit.
 
 ### Other agents — via the `skills` CLI (recommended)
 
@@ -70,7 +70,7 @@ Agent IDs: `claude-code`, `codex`, `cursor`, `gemini-cli`, `github-copilot`, `op
 
 ### Other agents — manual install
 
-Copy `skills/agent-discipline/` into the agent's skills folder:
+Copy `skills/mistral-vibe-harness/` into the agent's skills folder:
 
 | Agent | Project | Global |
 |-------|---------|--------|
@@ -93,7 +93,7 @@ Paste the body of `SKILL.md` (everything after the `---` frontmatter) into the a
 An agent loads a skill only when it judges the task matches the description. If yours skips it on small changes, add this line to the project's `AGENTS.md` (or `CLAUDE.md`, `GEMINI.md`…):
 
 ```
-Always load the agent-discipline skill before any code change.
+Always load the mistral-vibe-harness skill before any code change.
 ```
 
 ## E2E test setup (remote Docker over SSH)

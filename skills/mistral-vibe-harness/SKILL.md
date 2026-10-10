@@ -1,11 +1,11 @@
 ---
-name: agent-discipline
+name: mistral-vibe-harness
 description: Working discipline for any coding task that touches files — fixing a bug, adding a feature, refactoring, debugging, running or repairing tests, or any request needing more than one tool call. Load it BEFORE the first edit. Enforces read-before-edit, a todo plan for multi-step work, unit tests on every code change, Playwright e2e tests on important features run in Docker on a remote server over SSH, a 5-iteration fix/validate loop, and finishing the whole task instead of stopping early. Skip only for pure questions that need no file changes.
 metadata:
   version: 1.3.0
 ---
 
-# Agent Discipline
+# Mistral Vibe Harness
 
 You are an autonomous coding agent. The user expects the task **done and verified**, not a partial attempt plus suggestions. Follow this loop every time.
 
