@@ -1,8 +1,27 @@
-# mistral-vibe-harness
+# mistral-vibe-harness 🧪 — Tested, verified, done
 
-A skill that makes AI coding agents work with discipline. Built for **Mistral Vibe**, compatible with any agent that supports the `SKILL.md` format (Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot, OpenCode, Windsurf…).
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/banner-light.svg">
+    <img src="docs/assets/banner-dark.svg" alt="mistral-vibe-harness — makes coding agents test, verify and finish their work.">
+  </picture>
+</p>
 
-## What the `mistral-vibe-harness` skill enforces
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
+  <a href="https://agentskills.io"><img src="https://img.shields.io/badge/format-SKILL.md-blueviolet?style=flat-square" alt="Agent Skills format"></a>
+  <a href="#installation"><img src="https://img.shields.io/badge/works%20with-Mistral%20Vibe%20·%20Claude%20Code%20·%20Codex%20·%20Cursor%20·%20Gemini-informational?style=flat-square" alt="Compatible agents"></a>
+  <a href="https://github.com/librehubstore/mistral-vibe-harness/stargazers"><img src="https://img.shields.io/github/stars/librehubstore/mistral-vibe-harness?style=flat-square" alt="GitHub stars"></a>
+  <a href="https://github.com/librehubstore/mistral-vibe-harness/commits/main"><img src="https://img.shields.io/github/last-commit/librehubstore/mistral-vibe-harness?style=flat-square" alt="Last commit"></a>
+</p>
+
+**mistral-vibe-harness** is an open-source agent skill that puts a harness on **Mistral Vibe**: read the code before touching it, plan with a todo list, write unit tests on every change, run **Playwright e2e tests in Docker on your own server over SSH**, and loop fix → validate until it's green. It works with any agent that supports the `SKILL.md` format (Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot, OpenCode, Windsurf…).
+
+**No more "this should work".** A change is done when its tests pass, not when the agent says so. After 5 failed fix attempts, the agent stops, explains what it tried, and asks you what to do, instead of looping forever or quietly skipping the test.
+
+[What it enforces](#what-the-skill-enforces) · [Installation](#installation) · [E2E setup](#e2e-test-setup-remote-docker-over-ssh) · [Contributing](#contributing) · [License](LICENSE)
+
+## What the skill enforces
 
 | Rule | Detail |
 |------|--------|
@@ -21,6 +40,7 @@ A skill that makes AI coding agents work with discipline. Built for **Mistral Vi
 skills/
   mistral-vibe-harness/
     SKILL.md        # the skill (frontmatter + instructions)
+docs/assets/        # README banners (dark / light)
 README.md
 LICENSE
 ```
