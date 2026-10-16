@@ -1,0 +1,29 @@
+# Harness guard, see hooks/guard.py. strict: if the guard itself fails, the call is denied.
+[[hooks]]
+name = "harness-guard-bash"
+type = "pre_tool"
+match = 're:(bash|powershell)$'
+strict = true
+timeout = 10
+command = "python .vibe/hooks/guard.py"
+
+[[hooks]]
+name = "harness-guard-files"
+type = "pre_tool"
+match = 're:(^|.)(edit|search_replace|write_file)$'
+strict = true
+timeout = 10
+command = "python .vibe/hooks/guard.py"
+
+[[hooks]]
+name = "harness-track-bash"
+type = "post_tool"
+match = 're:(bash|powershell)$'
+timeout = 10
+command = "python .vibe/hooks/guard.py"
+
+[[hooks]]
+name = "harness-turn-end"
+type = "post_agent"
+timeout = 10
+command = "python .vibe/hooks/guard.py"
