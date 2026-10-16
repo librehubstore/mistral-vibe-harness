@@ -6,8 +6,8 @@
     python evals/run.py --score evals/results/baseline   # re-score without re-running
     python evals/run.py --selftest
 
-Each scenario is copied to a temp git repo, the repo's skills/ go into its
-.vibe/skills/ (project scope wins over ~/.vibe/skills), then Vibe runs in
+Each scenario is copied to a temp git repo, the repo's vibe/ goes into its .vibe/
+and skills/ into .vibe/skills/ (project scope wins over ~/.vibe), then Vibe runs in
 programmatic mode with --auto-approve. Results land in evals/results/<label>/.
 """
 
@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parent
 SCENARIOS = ROOT / "scenarios"
 RESULTS = ROOT / "results"
 REPO_SKILLS = ROOT.parent / "skills"
+REPO_VIBE = ROOT.parent / "vibe"
 
 INSTALL = re.compile(
     r"\b(npm|pnpm|yarn)\s+(i|install|ci|add)\b|\bpip3?\s+install\b"
@@ -174,6 +175,7 @@ def run_scenario(name, args):
         (work / ".vibe").mkdir()
         (work / ".vibe" / "config.toml").write_text('disabled_skills = ["mistral-vibe-harness"]\n', encoding="utf-8")
     else:
+        shutil.copytree(REPO_VIBE, work / ".vibe", ignore=shutil.ignore_patterns("NOTICE"))
         shutil.copytree(REPO_SKILLS, work / ".vibe" / "skills")
     for cmd in (["git", "init", "-q"], ["git", "add", "-A"],
                 ["git", "-c", "user.name=eval", "-c", "user.email=eval@local", "commit", "-qm", "fixture"]):
@@ -182,6 +184,8 @@ def run_scenario(name, args):
     vibe = ["vibe", "--prompt-file", str(src / "prompt.md"), "--workdir", str(work),
             "--trust", "--auto-approve", "--max-turns", str(args.max_turns),
             "--time-limit", str(args.time_limit), "--output-dir", str(out)]
+    if not args.no_skill:  # --auto-approve alone would switch to the built-in auto-approve agent
+        vibe += ["--agent", "harness"]
     print(f"[{name}] running in {work}", flush=True)
     with open(out / "stdout.txt", "w", encoding="utf-8") as f:
         # PYTHONUTF8: Vibe crashes printing non-cp1252 chars to a redirected stdout on Windows.
@@ -209,6 +213,8 @@ def score_dir(out, check=None):
     metrics = analyze(messages, state["workdir"])
     export_file = out / "export.json"
     export = json.loads(export_file.read_text(encoding="utf-8")) if export_file.exists() else {}
+    metrics["harness_prompt"] = any("## Harness rules" in f.read_text(encoding="utf-8", errors="ignore")
+                                    for f in (out / "session" / "journal").glob("*.jsonl"))
     result_info = export.get("result", export)
     metrics.update({k: result_info.get(k) for k in ("outcome", "steps", "cost_usd")})
     metrics["skills_used"] = [json.loads(c["function"]["arguments"] or "{}").get("name")
@@ -227,7 +233,7 @@ def report(results):
         print(f"\n{r['scenario']}: {r['passed']}/{r['total']}  outcome={m.get('outcome')} "
               f"steps={m.get('steps')} cost=${m.get('cost_usd')} tool_calls={m['tool_calls']} "
               f"failed={m['failed_calls']} installs={m['installs']} (failed {m['failed_installs']}) "
-              f"skills={m.get('skills_used')}")
+              f"skills={m.get('skills_used')} prompt={'harness' if m.get('harness_prompt') else 'stock'}")
         for k, ok in r["grades"].items():
             print(f"  {'PASS' if ok else 'FAIL'}  {k}")
     print(f"\nTOTAL {sum(r['passed'] for r in results)}/{sum(r['total'] for r in results)}")

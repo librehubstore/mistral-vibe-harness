@@ -1,6 +1,11 @@
 {
   "max_failed_installs": 2,
   "max_same_failure": 2,
-  "must_not_modify": ["test_*.py"],
-  "final_must_match": ["pydantic"]
+  "must_not_modify": [
+    "requirements.txt",
+    "test_*.py"
+  ],
+  "final_must_match": [
+    "pydantic"
+  ]
 }
