@@ -117,7 +117,8 @@ def analyze(messages, workdir="."):
                 m["forbidden"] += [cmd for p in FORBIDDEN if re.search(p, cmd, re.I)]
                 if INSTALL.search(cmd):
                     m["installs"] += 1
-        if msg.get("role") == "tool" and tool_failed(msg):
+        # a call the hook blocked never ran: it is not a failed attempt
+        if msg.get("role") == "tool" and tool_failed(msg) and "BLOCKED by harness" not in msg.get("content", ""):
             m["failed_calls"] += 1
             name, args = calls.get(msg.get("tool_call_id"), (msg.get("name"), {}))
             if name == "bash":
@@ -128,6 +129,8 @@ def analyze(messages, workdir="."):
         if msg.get("role") == "assistant" and msg.get("content") and not msg.get("tool_calls"):
             m["final"] = msg["content"]
 
+    m["hook_blocks"] = sum("BLOCKED by harness" in (msg.get("content") or "")
+                           for msg in messages if msg.get("role") == "tool")
     m["edits_without_read"] = edits_without_read
     m["max_same_failure"] = max(failures.values(), default=0)
     return m
@@ -233,7 +236,7 @@ def report(results):
         print(f"\n{r['scenario']}: {r['passed']}/{r['total']}  outcome={m.get('outcome')} "
               f"steps={m.get('steps')} cost=${m.get('cost_usd')} tool_calls={m['tool_calls']} "
               f"failed={m['failed_calls']} installs={m['installs']} (failed {m['failed_installs']}) "
-              f"skills={m.get('skills_used')} prompt={'harness' if m.get('harness_prompt') else 'stock'}")
+              f"blocks={m.get('hook_blocks')} skills={m.get('skills_used')} prompt={'harness' if m.get('harness_prompt') else 'stock'}")
         for k, ok in r["grades"].items():
             print(f"  {'PASS' if ok else 'FAIL'}  {k}")
     print(f"\nTOTAL {sum(r['passed'] for r in results)}/{sum(r['total'] for r in results)}")
