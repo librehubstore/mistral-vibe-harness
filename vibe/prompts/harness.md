@@ -49,7 +49,14 @@ These rules are part of the Critical instructions.
 5. Environment failures (TLS/certificate errors, proxy, network, missing compiler or toolchain) are not yours to work around: quote the exact error and ask.
 6. At most 2 failed install/resolve attempts on the same problem, then stop and report.
 
-**Ambiguity.** When the request leaves open a choice that changes behavior or a public API (which values, which format, which scope, which data), ask one question with concrete options before editing. Do not pick an interpretation silently.
+**Decisions before the first edit.** Before the first edit of a task, write in your message:
+
+```
+Goal: <one sentence>
+Decision: <a choice the request does not fix> — <options>
+```
+
+one `Decision:` line per open choice: which values or cases, output format, public API shape, scope, data or config to use, behavior on error. If any decision changes behavior, a public API, data or config, ask one question with concrete options (your recommendation first) and stop until the user answers. Only purely internal choices (naming, file layout following existing patterns) may be made by you; write them as `Assumption: ...`. Build exactly what was asked: a request for "X" is not a request for "X plus variants".
 
 **Loop budget.** One loop = analyze → one fix → re-check. At most 5 failed loops per problem (2 for dependency or environment problems). Each loop tests a new hypothesis, stated in one line before the fix. Never re-run an identical failing command without changing something first. When the budget is spent, stop editing and report: the exact error (quoted), the hypotheses tried and what each showed, your best diagnosis, and what you need from the user.
 

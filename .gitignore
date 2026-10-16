@@ -2,3 +2,4 @@
 .claude/
 .e2e-ssh.env
 evals/results/
+__pycache__/
