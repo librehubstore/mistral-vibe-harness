@@ -1,8 +1,8 @@
 ---
 name: mistral-vibe-harness
-description: Working discipline for any coding task that touches files — fixing a bug, adding a feature, refactoring, debugging, running or repairing tests, or any request needing more than one tool call. Load it BEFORE the first edit. Enforces read-before-edit, a todo plan for multi-step work, unit tests on every code change, Playwright e2e tests on important features run in Docker on a remote server over SSH, a 5-iteration fix/validate loop, and finishing the whole task instead of stopping early. Skip only for pure questions that need no file changes.
+description: Working discipline for any coding task that touches files — fixing a bug, adding a feature, refactoring, debugging, running or repairing tests, or any request needing more than one tool call. Load it BEFORE the first edit. Enforces read-before-edit, a todo plan for multi-step work, one git worktree per implementation-plan lot merged only after user validation, unit tests on every code change, Playwright e2e tests on important features run locally after the user confirms the environment works, a hard stop to ask for help after 5 failed loops on any problem, and finishing the whole task instead of stopping early. Skip only for pure questions that need no file changes.
 metadata:
-  version: 1.3.0
+  version: 1.4.0
 ---
 
 # Mistral Vibe Harness
@@ -10,6 +10,12 @@ metadata:
 You are an autonomous coding agent. The user expects the task **done and verified**, not a partial attempt plus suggestions. Follow this loop every time.
 
 > Tool names below are Mistral Vibe's (`read`, `edit`, `grep`, `bash`, `todo`, `ask_user_question`). On another agent, use its equivalent: file read, exact-string edit, code search, shell, task/todo list, and ask-the-user tools.
+
+## Hard rule: 5 loops max on any problem, then STOP and ask
+
+Applies to **everything you do**, not only tests: a failing test, a build or type error, an `edit` that won't apply, a command that keeps failing, an env/config issue, a feature that doesn't behave as expected.
+
+One loop = **analyze → try one fix → re-check**. Count loops per problem in `todo` (`"Fix login redirect — loop 3/5"`). After the 5th failed loop, stop editing and ask the user for help (report format in section 5). Never start a 6th loop on your own.
 
 ## 1. Understand before acting
 
@@ -28,6 +34,31 @@ Use the `todo` tool when the task needs **3+ distinct steps** or touches **2+ fi
 - Never mark an item `completed` if its check failed. Keep it `in_progress` and fix it, or mark `cancelled` with the reason.
 
 Single-step trivial tasks: no todo list.
+
+### One git worktree per lot
+
+When working from an implementation plan split into lots, each lot is done in its own git worktree (GitLab is only the remote; worktrees are plain `git`).
+
+**At the start of each lot:**
+
+1. Ask the user which base branch to use if it's not obvious (default `develop`). Update it: `git fetch origin && git switch develop && git pull --ff-only`.
+2. Create the worktree next to the repo, on a new branch:
+   ```
+   git worktree add ../<repo>-lot-<N> -b feature/lot-<N>-<short-name> develop
+   ```
+3. Work **only** in that directory for every phase of the lot (code, unit tests, e2e). Untracked files are not copied: copy the local env files (`.env`, `.env.local`, …) from the main checkout and install dependencies (`npm ci`, `pip install -r requirements.txt`, …) in the worktree.
+4. Commit in the worktree as phases complete.
+
+**At the end of the lot**, once every phase is done and verified (section 6 checklist), ask the user to validate the lot. Only after their explicit OK, propose the merge with `ask_user_question`: into `develop` (default) or another branch they name. On their OK:
+
+```
+git -C <main-checkout> switch develop
+git -C <main-checkout> pull --ff-only
+git -C <main-checkout> merge --no-ff feature/lot-<N>-<short-name>
+git worktree remove ../<repo>-lot-<N>
+```
+
+Merge conflict → stop and show the conflicting files to the user; don't resolve business logic conflicts by guessing. Never push, force-push, or delete a branch without the user asking.
 
 ## 3. Make the change
 
@@ -51,75 +82,44 @@ A change is not done until you have evidence it works. Find the project's test c
 
 An important functional feature is a user-visible flow: a new page or screen, a form, auth/login, payment or checkout, navigation, a multi-step workflow, an API flow consumed by the UI, or any feature touching both front and back end. When in doubt, treat it as important.
 
-- Playwright not in the project → add it as a dev dependency (`npm i -D @playwright/test`, or `pytest-playwright` for Python) and create a minimal `playwright.config` with `webServer` starting the app. No local browser install needed: browsers come with the Docker image (see 4c).
+- Playwright not in the project → add it as a dev dependency (`npm i -D @playwright/test`, or `pytest-playwright` for Python), install a browser (`npx playwright install chromium` / `playwright install chromium`), and create a minimal `playwright.config` with `webServer` starting the app.
 - Write at least one test per user scenario: the happy path plus the main failure path (invalid input, unauthorized, empty state). Assert on what the user sees (text, URL, visible elements), not on implementation details.
 - Prefer role/label/test-id locators (`getByRole`, `getByLabel`, `getByTestId`) over CSS selectors. No fixed `waitForTimeout` — use Playwright's auto-waiting assertions.
 - On failure, read the error, the trace, and the screenshot before changing anything.
 
-### 4c. Run e2e tests on the remote Docker host over SSH
+### 4c. Run e2e tests locally — after the environment is validated
 
-E2E tests do NOT run locally. They run in Docker on the user's remote server, over SSH.
+E2E tests run **only locally** on the development machine. No remote host, no SSH.
 
-**Connection config — `.e2e-ssh.env` at the project root:**
+**Before the first e2e run of a session (and in each new worktree), validate the environment:**
 
-```
-E2E_SSH_HOST=203.0.113.10
-E2E_SSH_USER=deploy
-E2E_SSH_PORT=22
-E2E_SSH_KEY=~/.ssh/id_ed25519
-E2E_REMOTE_DIR=~/vibe-e2e/<project-name>
-```
+1. **Check the environment variables.** List every variable the app needs (`.env.example`, `.env.sample`, config files, `grep` for `process.env` / `os.environ` / `getenv`). Compare with the local `.env` files: report missing, empty, or placeholder values (`changeme`, `xxx`, `localhost` where a real host is expected). Never print secret values — show only the variable names and whether they are set.
+2. **Check the external dependencies.** For each database, cache, queue, or external API the app uses, check that it is reachable from the machine (e.g. `pg_isready`, `redis-cli ping`, `docker compose ps` if the project starts them with compose, `curl -sS -o /dev/null -w "%{http_code}"` on an API health endpoint).
+3. **Start the app** with the project's dev command and check the logs for connection errors (DB, API, auth, migrations).
+4. **Ask the user to confirm** with `ask_user_question`: show what you checked (variables set/missing, each dependency reachable or not, app startup result) and ask them to confirm the project starts correctly with access to its databases and APIs. Do **not** run e2e tests before they confirm.
 
-- File missing → ask the user with `ask_user_question` (use the free-text "Other" answer) for: host, user, port (default 22), path to the private key. Write the file, and add `.e2e-ssh.env` to `.gitignore`.
-- **Key authentication only.** Never ask for, accept, write, or pass a password or passphrase. Your shell is non-interactive, so a password prompt would hang. If the user only has password access, stop and tell them to run `ssh-copy-id -i <key>.pub -p <port> <user>@<host>` themselves (on Windows: append the `.pub` content to `~/.ssh/authorized_keys` on the server), then continue.
-- Never print the private key content. Never commit the env file.
+Anything missing or unreachable → report it precisely and ask the user to fix it. Don't invent credentials or point the app at another database on your own.
 
-**Check the connection** before the first run (always pass `-o BatchMode=yes` so it fails instead of prompting):
-
-```
-ssh -o BatchMode=yes -o ConnectTimeout=10 -i <KEY> -p <PORT> <USER>@<HOST> "docker info --format '{{.ServerVersion}}'"
-```
-
-Fails → report the exact error (unknown host, permission denied, docker not found / permission denied on docker.sock) and ask the user to fix it. Infrastructure failures do NOT count as fix/validate loops.
-
-**Each e2e run:**
-
-1. Sync the code (`tar` and `ssh` are built into Windows 10+, Linux and macOS):
-   ```
-   ssh <opts> <USER>@<HOST> "mkdir -p <REMOTE_DIR>"
-   tar -czf - --exclude=node_modules --exclude=.git --exclude=test-results --exclude=playwright-report --exclude=.e2e-ssh.env . | ssh <opts> <USER>@<HOST> "tar -xzf - -C <REMOTE_DIR>"
-   ```
-2. Run Playwright in the official image, with the **same version** as the project's `@playwright/test` (or `playwright` Python package):
-   ```
-   ssh <opts> <USER>@<HOST> "cd <REMOTE_DIR> && docker run --rm --ipc=host -v \$PWD:/work -w /work mcr.microsoft.com/playwright:v<VERSION>-noble sh -c 'npm ci && npx playwright test --reporter=line'"
-   ```
-   Python projects: image `mcr.microsoft.com/playwright/python:v<VERSION>-noble`, command `pip install -r requirements.txt && pytest --browser chromium`.
-   The app is started inside the container by the `webServer` block of `playwright.config`. If the app needs other services (DB, cache), use the project's `docker-compose` file on the remote: `docker compose up -d --build`, run Playwright on the same compose network, then `docker compose down` at the end.
-3. On failure, fetch the artifacts and analyze them locally:
-   ```
-   scp -r -P <PORT> -i <KEY> <USER>@<HOST>:<REMOTE_DIR>/test-results ./test-results
-   ```
-
-Each fix/validate iteration = local fix → sync → remote run. Containers use `--rm`, so nothing is left running. Never run other docker commands on the server (no `docker rm`, `prune`, or touching containers you didn't start).
+**Each e2e run:** `npx playwright test --reporter=line` (Python: `pytest --browser chromium`). The app is started by the `webServer` block of `playwright.config` (`reuseExistingServer: true` if it's already running). On failure, read `test-results/` (trace, screenshot) before changing anything.
 
 Also run type checker / linter / build when the project has them. Read the output: "exit code 0" with an error in stderr is not success.
 
 ## 5. Fix → validate loop (max 5 iterations)
 
-When a unit or e2e test fails, enter the correction loop. One iteration = **analyze the failure → apply one fix → re-run the failing tests**.
+When a unit or e2e test fails — or any other problem resists (see the hard rule above) — enter the correction loop. One iteration = **analyze the failure → apply one fix → re-check**.
 
-- Track it in `todo`: `"Fix e2e checkout test — loop 2/5"`. Count unit and e2e loops separately.
+- Track it in `todo`: `"Fix e2e checkout test — loop 2/5"`. Count each problem separately.
 - Each iteration must test a **different hypothesis**. Before each fix, write in one line what you think is wrong and why the previous fix didn't work. Re-`read` the code involved; don't patch blindly.
 - Fix the code, not the test. Changing an assertion is only allowed if the test itself was wrong — and you must say so explicitly.
 - Never skip, delete, mark `.skip`/`xfail`, or loosen a test to make it pass.
-- You must make the full 5 attempts before giving up — do not stop at the first or second failure.
+- Make real attempts — do not give up at the first or second failure.
 - A test passes → re-run the whole suite (unit + e2e) to confirm nothing else broke. A new failure starts its own loop.
 
-### After 5 failed iterations: STOP
+### After 5 failed iterations: STOP and ask for help
 
 Stop editing code and report to the user:
 
-1. Which test fails and the exact error (quoted).
+1. What fails and the exact error (quoted).
 2. The 5 hypotheses you tried and what each one showed.
 3. Your best current diagnosis of the root cause.
 4. What you need to continue: a decision, missing info, access, or a choice between options (list them).
@@ -133,9 +133,10 @@ Before your final answer, check:
 - [ ] Every todo item is `completed` or `cancelled` with a reason.
 - [ ] Every part of the original request is addressed — re-read it.
 - [ ] Unit tests were added/updated for every logic change, and the full unit suite passes.
-- [ ] For an important functional feature: Playwright e2e tests exist and pass.
+- [ ] For an important functional feature: the user confirmed the local environment, and Playwright e2e tests exist and pass.
 - [ ] Verification was actually run and passed (or you clearly state what could not be verified and why).
 - [ ] No leftover debug prints, commented-out code, or temp files.
+- [ ] Working from a plan lot: everything is committed in the lot's worktree, the user validated the lot, and the merge was proposed (not done without their OK).
 
 Do not stop to ask "should I continue?" mid-task when the next step is obvious. Do not end with "you could also..." for work that was part of the request — do it.
 
