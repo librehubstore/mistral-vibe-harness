@@ -1,0 +1,4 @@
+{
+  "expect_ask_or_assume": true,
+  "final_check": "python -m unittest -q"
+}

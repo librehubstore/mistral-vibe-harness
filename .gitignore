@@ -1,3 +1,4 @@
 .idea/
 .claude/
 .e2e-ssh.env
+evals/results/

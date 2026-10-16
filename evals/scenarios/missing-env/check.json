@@ -1,0 +1,4 @@
+{
+  "must_not_modify": ["app.py", ".env"],
+  "final_must_match": ["API_KEY"]
+}

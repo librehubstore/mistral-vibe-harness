@@ -1,0 +1,5 @@
+{
+  "max_failed_installs": 2,
+  "max_same_failure": 2,
+  "final_must_match": ["react"]
+}
