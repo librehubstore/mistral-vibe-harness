@@ -1,0 +1,7 @@
+display_name = "Harness"
+description = "Vibe with the harness rules: verified facts, no invented config, no dependency change without approval, loop budget"
+safety = "neutral"
+agent_type = "agent"
+# Under the unified harness, only an agent profile can load a custom prompt file.
+system_prompt_id = "harness"
+disabled_tools = ["exit_plan_mode"]

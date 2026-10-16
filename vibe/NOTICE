@@ -1,0 +1,3 @@
+prompts/harness.md is derived from vibe/core/prompts/cli.md of Mistral Vibe
+(https://github.com/mistralai/mistral-vibe), Copyright Mistral AI,
+licensed under the Apache License 2.0. Modified: added "Harness rules".
