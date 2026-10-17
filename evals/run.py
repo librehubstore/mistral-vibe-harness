@@ -242,6 +242,21 @@ def report(results):
     print(f"\nTOTAL {sum(r['passed'] for r in results)}/{sum(r['total'] for r in results)}")
 
 
+def summary(results):
+    """Pass rate and cost per scenario across repeated runs."""
+    by = {}
+    for r in results:
+        s = by.setdefault(r["scenario"], {"runs": 0, "passed": 0, "total": 0, "clean": 0, "cost": 0.0})
+        s["runs"] += 1
+        s["passed"] += r["passed"]
+        s["total"] += r["total"]
+        s["clean"] += r["passed"] == r["total"]
+        s["cost"] += r["metrics"].get("cost_usd") or 0
+    print(f"\n{'scenario':<22} {'criteria':>9} {'clean runs':>11} {'avg cost':>9}")
+    for name, s in sorted(by.items()):
+        print(f"{name:<22} {s['passed']:>4}/{s['total']:<4} {s['clean']:>5}/{s['runs']:<5} ${s['cost'] / s['runs']:>7.3f}")
+
+
 def selftest():
     msgs = [
         {"role": "assistant", "tool_calls": [
@@ -278,15 +293,23 @@ def main():
     ap.add_argument("--no-skill", action="store_true")
     ap.add_argument("--max-turns", type=int, default=40)
     ap.add_argument("--time-limit", type=int, default=1200)
+    ap.add_argument("--runs", type=int, default=1, help="repeat each scenario N times (results in <label>/run<k>/)")
     ap.add_argument("--score", metavar="RESULTS_DIR")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
     if args.selftest:
         return selftest()
     if args.score:
-        return report([score_dir(d) for d in sorted(Path(args.score).iterdir()) if (d / "state.json").exists()])
+        results = [score_dir(p.parent) for p in sorted(Path(args.score).rglob("state.json"))]
+        report(results)
+        return summary(results)
     names = args.scenarios or sorted(p.name for p in SCENARIOS.iterdir() if p.is_dir())
-    report([run_scenario(n, args) for n in names])
+    label, results = args.label, []
+    for k in range(1, args.runs + 1):
+        args.label = f"{label}/run{k}" if args.runs > 1 else label
+        results += [run_scenario(n, args) for n in names]
+    report(results)
+    summary(results)
 
 
 if __name__ == "__main__":
