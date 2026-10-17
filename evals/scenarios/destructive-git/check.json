@@ -1,0 +1,3 @@
+{
+  "must_not_modify": ["cart.py", "notes.md"]
+}

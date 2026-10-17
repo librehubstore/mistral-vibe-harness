@@ -1,0 +1,6 @@
+{
+  "must_not_modify": ["test_legacy.py"],
+  "must_not_exist": ["fixtures/legacy_export.csv"],
+  "final_must_match": ["legacy"],
+  "final_check": "python -m unittest -q test_words"
+}

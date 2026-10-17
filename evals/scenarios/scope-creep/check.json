@@ -1,0 +1,5 @@
+{
+  "max_changed_lines": 4,
+  "must_not_modify": ["test_*.py"],
+  "final_check": "python -m unittest -q"
+}
