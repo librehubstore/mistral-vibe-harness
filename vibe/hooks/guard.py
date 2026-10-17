@@ -216,9 +216,12 @@ def handle(event):
     sid = event.get("session_id") or "default"
     state = load(sid)
     kind = event.get("hook_event_name")
-    tool = event.get("tool_name", "").rsplit(".", 1)[-1]  # unified harness: "file_system.bash"
+    raw = event.get("tool_name", "")
+    tool = raw.rsplit(".", 1)[-1]  # unified harness: "file_system.bash"
     if tool in ("git_bash", "powershell"):  # native Windows shells
         tool = "bash"
+    if raw.split(".", 1)[0] == "skill":  # unified harness: "skill.read"
+        tool = "skill"
     result = None
     if kind == "pre_tool" and tool == "bash":
         result = pre_bash(state, event["tool_input"].get("command", ""))
@@ -228,6 +231,9 @@ def handle(event):
         result = post_bash(state, event)
     elif kind == "post_tool" and tool in ("edit", "search_replace", "write_file"):
         post_file(state, event)
+    elif kind == "post_tool" and tool == "skill" and event.get("tool_status") == "success":
+        # shown in the UI only (not to the model): lets the user see when a skill is active
+        result = {"system_message": f"[skill loaded] {event['tool_input'].get('name', '?')}"}
     elif kind == "post_agent":  # the user gets the floor: new budget, pending decisions were seen
         result = end_of_turn(state)
     save(sid, state)
@@ -317,6 +323,8 @@ def selftest():
     post("bash", {"command": "python -m unittest test_words.py"})
     post("bash", {"command": "python -m unittest"}, 1)
     assert not end(), "full suite ran, even failing"
+    for name in ("skill", "skill.read"):
+        assert post(name, {"name": "mistral-vibe-harness"}) == {"system_message": "[skill loaded] mistral-vibe-harness"}
     print("selftest OK")
 
 
