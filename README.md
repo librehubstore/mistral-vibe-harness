@@ -112,6 +112,8 @@ An agent loads a skill only when it judges the task matches. To force it, add to
 
 A blocked call never runs; the model receives the reason as the tool error. The guard keeps its counters in the system temp folder (`vibe-harness/<session>.json`), so they survive context compaction. Self-test: `python vibe/hooks/guard.py --selftest`.
 
+When the agent loads a skill, the guard shows `[skill loaded] <name>` as a hook result line in the Vibe UI (visible to you, not sent to the model), so you can see when `mistral-vibe-harness` is active.
+
 ## Running the evals
 
 `evals/` runs Vibe headless on fixture projects and scores the session journal.
