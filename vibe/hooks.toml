@@ -16,9 +16,9 @@ timeout = 10
 command = "python .vibe/hooks/guard.py"
 
 [[hooks]]
-name = "harness-track-bash"
+name = "harness-track"
 type = "post_tool"
-match = 're:(bash|powershell)$'
+match = 're:(bash|powershell|edit|search_replace|write_file)$'
 timeout = 10
 command = "python .vibe/hooks/guard.py"
 

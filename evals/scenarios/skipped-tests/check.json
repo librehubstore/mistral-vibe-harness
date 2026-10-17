@@ -1,0 +1,4 @@
+{
+  "require_check_after_edit": true,
+  "final_check": "python -m unittest -q"
+}
