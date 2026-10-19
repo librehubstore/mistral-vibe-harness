@@ -87,7 +87,8 @@ VERIFY = ("BLOCKED by harness: you changed code ({files}) and ran no test, build
 TARGETED = re.compile(
     r"\bunittest\b(\s+-\w+)*\s+(?!discover\b)(?![-&|;>\d])\S"
     r"|\bpytest\b[^|;&]*(\s-k\s|::|\s[\w./\\-]+\.py\b|\s(tests?|src)[/\\]\S+)"
-    r"|\b(vitest|jest)\b[^|;&]*\s[\w./\\-]+\.(test|spec)\.\w+|--testNamePattern", re.I)
+    r"|\b(vitest|jest)\b[^|;&]*\s[\w./\\-]+\.(test|spec)\.\w+|--testNamePattern"
+    r"|\s[\"']?-Dtest=|\s--tests\s", re.I)
 SUBSET = ("BLOCKED by harness: since your last edit you only ran part of the test suite (`{cmd}`). "
           "Run the project's full test suite once, then report its actual result, including failures "
           "unrelated to your change.")
@@ -192,6 +193,8 @@ def post_bash(state, event):
 
 def post_file(state, event):
     path = event["tool_input"].get("file_path") or event["tool_input"].get("path") or ""
+    if event.get("tool_status") == "success":
+        state["failures"] = {}  # a file changed: rerunning the same failing command is no longer a blind retry
     if event.get("tool_status") == "success" and CODE_FILE.search(path):
         name = Path(path).name
         if name not in state.setdefault("unverified", []):
@@ -270,6 +273,9 @@ def selftest():
     assert not pre("npm install")
     fail("cd /b && npm install")
     assert "already failed twice" in pre("npm install")["reason"]
+    handle({"session_id": "t", "hook_event_name": "post_tool", "tool_name": "search_replace",
+            "tool_input": {"file_path": "notes.md"}, "tool_status": "success"})
+    assert "already failed" not in pre("npm install")["reason"], "an edit resets the retry count"
     assert "dependency budget" in pre("npm ci")["reason"]
     assert not pre("python -m pytest")
     assert edit(".env", "", "API_KEY=x") and not edit(".env.example", "", "API_KEY=")
@@ -316,10 +322,11 @@ def selftest():
     for cmd in ("mvn dependency:tree", "./gradlew dependencies"):
         assert not CHECK_CMD.search(cmd), cmd
     for cmd in ("python -m unittest test_words.py -v", "python -m unittest -v tests.test_a", "pytest tests/test_a.py",
-                "pytest -k slug", "pytest test_x.py::test_y", "npx vitest run src/a.test.ts"):
+                "pytest -k slug", "pytest test_x.py::test_y", "npx vitest run src/a.test.ts",
+                "mvn test -Dtest=FooTest", "mvn -q \"-Dtest=FooTest#bar\" test", "./gradlew test --tests FooTest"):
         assert TARGETED.search(cmd), cmd
     for cmd in ("python -m unittest", "python -m unittest -q 2>&1", "python -m unittest discover -v",
-                "pytest -q", "npm test", "cd /x && python -m pytest"):
+                "pytest -q", "npm test", "cd /x && python -m pytest", "mvn clean test", "./gradlew test"):
         assert not TARGETED.search(cmd), cmd
     post("edit", {"file_path": "words.py"})
     post("bash", {"command": "python -m unittest test_words.py -v"})
