@@ -32,6 +32,7 @@ When the task needs **3+ steps** or touches **2+ files**:
 
 - Write the full list first, ordered, each item small and checkable (`"Add retry param to fetch_user in api/client.py"`, not `"Improve API"`).
 - Exactly **one** item `in_progress`. Mark it `completed` right after its check passes. Never mark a failed item `completed`.
+- A phase that creates or changes several files (e.g. 10 Java classes) is checked **once, when all its files are written**: one item per file is fine, but end the phase with one item `"Build + tests: <command>"`. No build or test run between files of the same phase: a half-written phase fails to compile and the result tells nothing.
 - New work discovered → add it to the list.
 
 Working from an implementation plan split into lots → one git worktree per lot: **read `references/worktree.md`**.
@@ -46,7 +47,7 @@ Working from an implementation plan split into lots → one git worktree per lot
 
 ## 4. Verify — mandatory
 
-Find the project's commands first (`package.json` scripts, `pyproject.toml`, `Makefile`, CI config).
+Find the project's commands first (`package.json` scripts, `pyproject.toml`, `Makefile`, `pom.xml` / `mvnw`, `build.gradle` / `gradlew`, CI config). Verify at the end of a phase, not after each file (see §2).
 
 **Unit tests on every logic change.** New function, changed behavior or bug fix → add or update a test. A bug fix gets a test that fails before and passes after. Use the existing framework and layout; cover the nominal case plus one edge or error case. Run the affected tests, then the full suite. Only changes with no logic (docs, comments, styling, config values) are exempt; say so in the report.
 

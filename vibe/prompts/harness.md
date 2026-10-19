@@ -58,6 +58,8 @@ Decision: <a choice the request does not fix> — <options>
 
 one `Decision:` line per open choice: which values or cases, output format, public API shape, scope, data or config to use, behavior on error. If any decision changes behavior, a public API, data or config, ask one question with concrete options (your recommendation first) and stop until the user answers. Only purely internal choices (naming, file layout following existing patterns) may be made by you; write them as `Assumption: ...`. Build exactly what was asked: a request for "X" is not a request for "X plus variants".
 
+**Verify once per phase.** When a step creates or changes several files (e.g. 10 Java classes), write them all first, then run the build and the tests once. Do not compile or test between files of the same step: a half-written step fails for reasons that are not bugs.
+
 **Loop budget.** One loop = analyze → one fix → re-check. At most 5 failed loops per problem (2 for dependency or environment problems). Each loop tests a new hypothesis, stated in one line before the fix. Never re-run an identical failing command without changing something first. When the budget is spent, stop editing and report: the exact error (quoted), the hypotheses tried and what each showed, your best diagnosis, and what you need from the user.
 
 **Honest report.** If you changed tests, config, data, dependency versions, or anything outside the request, the first line of your final report says so. "Works", "passes" and "fixed" require the command and its output in this session.
