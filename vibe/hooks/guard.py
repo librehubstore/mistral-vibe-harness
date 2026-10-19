@@ -75,7 +75,8 @@ DESTRUCTIVE_GIT = re.compile(
 CHECK_CMD = re.compile(
     r"\b(pytest|unittest|nose2|tox|npm\s+(run\s+)?(test|build|lint|check|typecheck)|pnpm\s+(run\s+)?(test|build)"
     r"|yarn\s+(test|build)|vitest|jest|playwright\s+test|tsc\b|mypy|ruff|eslint|go\s+(test|build|vet)"
-    r"|cargo\s+(test|build|check)|mvn\s+(test|verify)|gradle\w*\s+(test|build)|dotnet\s+(test|build)|make\s+(test|check))",
+    r"|cargo\s+(test|build|check)|mvnw?(\.cmd)?\b[^|;&]*\s(test|verify|package|install)\b"
+    r"|gradlew?(\.bat)?\b[^|;&]*\s(test|build|check)\b|dotnet\s+(test|build)|make\s+(test|check))",
     re.I)
 CODE_FILE = re.compile(
     r"\.(py|js|mjs|cjs|ts|tsx|jsx|vue|svelte|go|rs|java|kt|rb|php|cs|c|cc|cpp|h|hpp|swift|scala|sql|sh|ps1)$", re.I)
@@ -309,6 +310,11 @@ def selftest():
     post("edit", {"file_path": "a.ts"})
     assert not post("bash", {"command": "cd x && npm test"}) and not end()
 
+    for cmd in ("mvn clean test", "mvn -q test", "./mvnw verify", r".\mvnw.cmd test", "mvn clean install",
+                "gradlew.bat test", "./gradlew clean build", "gradle check"):
+        assert CHECK_CMD.search(cmd), cmd
+    for cmd in ("mvn dependency:tree", "./gradlew dependencies"):
+        assert not CHECK_CMD.search(cmd), cmd
     for cmd in ("python -m unittest test_words.py -v", "python -m unittest -v tests.test_a", "pytest tests/test_a.py",
                 "pytest -k slug", "pytest test_x.py::test_y", "npx vitest run src/a.test.ts"):
         assert TARGETED.search(cmd), cmd
