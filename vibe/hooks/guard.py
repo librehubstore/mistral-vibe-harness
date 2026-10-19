@@ -5,12 +5,12 @@ on stdin. A pre_tool denial becomes the tool error the model sees.
 
 - Always blocked: dependency/TLS escape hatches, deleting lockfiles or node_modules.
 - Needs the user: changing a dependency, editing .env*, a manifest's versions or a
-  lockfile. Blocked inside the agent's turn; once the agent has stopped and the user
-  answered (post_agent), the same action goes through.
+  lockfile. Blocked with an order to ask the user via `ask_user_question` (Allow/Deny);
+  an Allow answer, or the user's next turn (post_agent), lets the same action through.
 - Destructive git (reset --hard, checkout/restore of files, clean, stash drop,
   branch -D, push) needs the user too.
 - Loop budget per turn: an identical failing command twice, 2 failed installs,
-  8 failed commands, then only reporting is left.
+  8 failed commands, then the agent reports and asks; Allow gives a fresh budget.
 - Verification: code edited and no test/build/check command run since → the end of
   the turn is refused once with "verify, then report". A failing test command gets a
   reminder that the report must say so.
@@ -23,6 +23,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 STATE_DIR = Path(tempfile.gettempdir()) / "vibe-harness"
@@ -30,6 +31,8 @@ MAX_SAME_FAILURE = 2
 MAX_FAILED_INSTALLS = 2
 MAX_FAILED_COMMANDS = 8  # ponytail: one cap per turn, not per problem; split by problem if it bites
 MAX_VERIFY_ASKS = 2  # Vibe allows 3 post_agent retries per turn; keep one for the subset rule
+# ponytail: idle gap as the "new turn" signal (hooks get no turn id); a model pausing longer mid-turn gets a fresh budget
+NEW_TURN_GAP = 120
 
 ESCAPES = [
     (r"--force(?![-\w])", "--force"),
@@ -99,11 +102,15 @@ ENV_TEMPLATE = re.compile(r"\.(example|sample|template|dist)$")
 LOCKFILES = {"package-lock.json", "yarn.lock", "pnpm-lock.yaml", "poetry.lock", "uv.lock", "pipfile.lock"}
 VERSION_SPEC = re.compile(r"""["']?[\w@/.-]+["']?\s*(:|==|>=|<=|~=|!=|=)\s*["']?[\^~<>=]*\d+\.\d+""")
 
-ASK = " Stop here: explain the situation to the user and ask what to do. Do not look for another way around it."
+ALLOW = "Allow"
+ASK = (" Stop here: call the `ask_user_question` tool with one question that quotes the blocked action and "
+       f"what it risks, and exactly two options labelled `{ALLOW}` and `Deny`. If the user picks {ALLOW}, run the "
+       "exact same action again; otherwise do not look for another way around it.")
+NEVER = " Explain the situation to the user and ask what to do. Do not look for another way around it."
 
 
-def blocked(why):
-    return {"decision": "deny", "reason": f"BLOCKED by harness: {why}.{ASK}"}
+def blocked(why, ask=ASK):
+    return {"decision": "deny", "reason": f"BLOCKED by harness: {why}.{ask}"}
 
 
 def normalize(cmd):
@@ -135,7 +142,7 @@ def needs_user(state, key, why):
 def pre_bash(state, cmd):
     for pattern, label in ESCAPES:
         if re.search(pattern, cmd, re.I):
-            return blocked(f"{label} is never allowed")
+            return blocked(f"{label} is never allowed", NEVER)
     norm = normalize(cmd)
     if state["failed_commands"] >= MAX_FAILED_COMMANDS:
         return blocked(f"{state['failed_commands']} commands failed in this turn, the loop budget is spent. "
@@ -201,25 +208,45 @@ def post_file(state, event):
             state["unverified"].append(name)
 
 
+def post_ask(state, event):
+    """The user answered a question: Allow lets the pending actions through with a fresh loop budget."""
+    out = event.get("tool_output") or {}
+    answers = [] if out.get("cancelled") else [a.get("answer", "") for a in out.get("answers", [])]
+    if any(a.strip().lower() == ALLOW.lower() for a in answers):
+        state.update(failures={}, failed_installs=0, failed_commands=0, approved=state["approved"] + state["pending"])
+    state["pending"] = []
+
+
+def reset_budget(state):
+    state.update(failures={}, failed_installs=0, failed_commands=0, verify_asked=0,
+                 subset_cmd=None, subset_asked=False)
+
+
 def end_of_turn(state):
     """Refuse the end of a turn once if code changed without a check; else hand the floor to the user."""
-    if state.get("unverified") and state.get("verify_asked", 0) < MAX_VERIFY_ASKS:
+    if state["failed_commands"] >= MAX_FAILED_COMMANDS:
+        pass  # the budget forbids any check: asking for one would be a dead end, the report must do
+    elif state.get("unverified") and state.get("verify_asked", 0) < MAX_VERIFY_ASKS:
         state["verify_asked"] = state.get("verify_asked", 0) + 1
         again = "Second request: a one-off `python -c` or manual run is not the test suite. " if state["verify_asked"] > 1 else ""
         return {"decision": "deny", "reason": again + VERIFY.format(files=", ".join(state["unverified"][:5]))}
-    if state.get("subset_cmd") and not state.get("subset_asked"):
+    elif state.get("subset_cmd") and not state.get("subset_asked"):
         state["subset_asked"] = True
         return {"decision": "deny", "reason": SUBSET.format(cmd=state["subset_cmd"])}
-    state.update(failures={}, failed_installs=0, failed_commands=0, verify_asked=0,
-                 subset_cmd=None, subset_asked=False,
-                 approved=state["approved"] + state["pending"], pending=[])
+    reset_budget(state)
+    state.update(approved=state["approved"] + state["pending"], pending=[])
     return None
 
 
-def handle(event):
+def handle(event, now=None):
     sid = event.get("session_id") or "default"
     state = load(sid)
     kind = event.get("hook_event_name")
+    now = time.time() if now is None else now
+    if kind == "pre_tool" and now - state.get("last_event", now) > NEW_TURN_GAP:
+        # an interrupted turn never reaches post_agent: without this its spent budget blocks every later turn
+        reset_budget(state)
+    state["last_event"] = now
     raw = event.get("tool_name", "")
     tool = raw.rsplit(".", 1)[-1]  # unified harness: "file_system.bash"
     if tool in ("git_bash", "powershell"):  # native Windows shells
@@ -235,6 +262,8 @@ def handle(event):
         result = post_bash(state, event)
     elif kind == "post_tool" and tool in ("edit", "search_replace", "write_file"):
         post_file(state, event)
+    elif kind == "post_tool" and tool == "ask_user_question" and event.get("tool_status") == "success":
+        post_ask(state, event)
     elif kind == "post_tool" and tool == "skill" and event.get("tool_status") == "success":
         # shown in the UI only (not to the model): lets the user see when a skill is active
         result = {"system_message": f"[skill loaded] {event['tool_input'].get('name', '?')}"}
@@ -336,6 +365,34 @@ def selftest():
     post("bash", {"command": "python -m unittest test_words.py"})
     post("bash", {"command": "python -m unittest"}, 1)
     assert not end(), "full suite ran, even failing"
+    def answer(text):
+        handle({"session_id": "t", "hook_event_name": "post_tool", "tool_name": "ask_user_question", "tool_input": {},
+                "tool_status": "success", "tool_output": {"answers": [{"question": "q", "answer": text}]}})
+
+    assert "ask_user_question" in pre("git push origin feat")["reason"]
+    answer("Deny")
+    assert pre("git push origin feat"), "Deny keeps it blocked"
+    answer("Allow")
+    assert not pre("git push origin feat"), "Allow lets it through in the same turn"
+    for _ in range(MAX_FAILED_COMMANDS):
+        fail("./mvnw -q -B verify")
+        post("edit", {"file_path": "notes.md"})
+    assert "loop budget" in pre("./mvnw -q -B verify")["reason"]
+    answer("Allow")
+    assert not pre("./mvnw -q -B verify"), "Allow gives a fresh loop budget"
+    post("edit", {"file_path": "Foo.java"})
+    for _ in range(MAX_FAILED_COMMANDS):
+        fail("./mvnw -q -B verify")
+        post("edit", {"file_path": "notes.md"})
+    assert not end(), "budget spent: no dead-end request to run the tests"
+    for _ in range(MAX_FAILED_COMMANDS):
+        fail("./mvnw -q -B verify")
+        post("edit", {"file_path": "notes.md"})
+    assert "loop budget" in pre("python --version")["reason"]
+    later = time.time() + NEW_TURN_GAP + 1
+    assert not handle({"session_id": "t", "hook_event_name": "pre_tool", "tool_name": "bash",
+                       "tool_input": {"command": "python --version"}}, now=later), "interrupted turn: budget resets"
+    assert "never allowed" in pre("npm install --force")["reason"] and "ask_user_question" not in pre("npm i --force")["reason"]
     for name in ("skill", "skill.read"):
         assert post(name, {"name": "mistral-vibe-harness"}) == {"system_message": "[skill loaded] mistral-vibe-harness"}
     print("selftest OK")
